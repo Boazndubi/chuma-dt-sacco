@@ -17,6 +17,24 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: 'Inter', system-ui, sans-serif;
+  position: relative;
+  min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  background: url('../img/logo.png') center / min(520px, 72vw) auto no-repeat;
+  opacity: 0.15;
+  pointer-events: none;
+}
+
+.topbar,
+.dashboard {
+  position: relative;
+  z-index: 1;
 }
 
 .brand {
@@ -32,6 +50,20 @@ body {
   font-size: 13px;
   color: var(--muted);
   margin-left: 6px;
+}
+
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+}
+
+.brand-logo img {
+  display: block;
+  width: auto;
+  height: 54px;
+  max-width: min(100%, 360px);
+  object-fit: contain;
 }
 
 /* ---- Login page ---- */
@@ -231,7 +263,7 @@ button {
   color: var(--ink);
 }
 .bulk-send-btn:hover, .bulk-clear-btn:hover { border-color: var(--green) !important; }
-.bulk-send-btn:disabled, .bulk-clear-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.bulk-send-btn:disabled, .bulk-clear-btn:disabled { opacity: 0.18; cursor: not-allowed; }
 .bulk-send-btn-both { background: var(--green); color: #fff; border-color: var(--green) !important; }
 .bulk-result { flex-basis: 100%; margin: 2px 0 0; font-size: 12px; }
 .bulk-result.success { color: var(--green-dark); }
@@ -316,6 +348,12 @@ button {
   border: 1px solid var(--border) !important;
   background: var(--surface);
   color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .topbar { padding: 12px 16px; }
+  .brand-logo img { height: 42px; max-width: 220px; }
+  .admin-name { display: none; }
 }
 
 @media (max-width: 640px) {

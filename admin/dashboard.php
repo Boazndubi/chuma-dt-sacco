@@ -52,18 +52,16 @@ $perPage = max(10, min($perPage, 100)); // clamp 10..100
 $page = (int) ($_GET['page'] ?? 1);
 $page = max(1, $page);
 
-// get_loans_for_admin() must accept this options array and return
-// ['loans' => [...], 'total' => int]
 $result = get_loans_for_admin($pdo, [
-    'search'   => $search,
-    'status'   => $status,
-    'last_sent'=> $lastSent,
-    'due_from' => $dueFrom,
-    'due_to'   => $dueTo,
-    'sort'     => $sortableColumns[$sortKey],
-    'dir'      => $sortDir,
-    'page'     => $page,
-    'per_page' => $perPage,
+    'search'    => $search,
+    'status'    => $status,
+    'last_sent' => $lastSent,
+    'due_from'  => $dueFrom,
+    'due_to'    => $dueTo,
+    'sort'      => $sortableColumns[$sortKey],
+    'dir'       => $sortDir,
+    'page'      => $page,
+    'per_page'  => $perPage,
 ]);
 
 $loans      = $result['loans'];
@@ -71,6 +69,7 @@ $totalLoans = $result['total'];
 $totalPages = max(1, (int) ceil($totalLoans / $perPage));
 $page       = min($page, $totalPages); // don't overshoot on stale links
 
+$summary = get_dashboard_summary($pdo);
 $csrfToken = csrf_token();
 
 /** Build a query string with one or more params overridden, keeping the rest. */
@@ -106,21 +105,39 @@ function sort_link(string $label, string $key, string $currentKey, string $curre
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard — Chuma DT Sacco Admin</title>
+<title>Dashboard — Chuna DT Sacco Admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/admin.css">
 </head>
 <body>
 <header class="topbar">
-  <p class="brand">Chuma DT Sacco <span class="brand-sub">Admin</span></p>
+  <a href="dashboard.php" class="brand-logo" aria-label="Chuna DT Sacco admin dashboard">
+    <img src="assets/img/logo.png" alt="Chuna DT Sacco Ltd - The University Sacco">
+  </a>
   <div class="topbar-right">
+    <a href="activity-log.php" class="logout-link">Activity log</a>
     <span class="admin-name"><?= h($admin['full_name']) ?></span>
     <a href="logout.php" class="logout-link">Sign out</a>
   </div>
 </header>
 
 <main class="dashboard">
+  <div class="summary-cards">
+    <div class="summary-card">
+      <p class="summary-label">Total outstanding</p>
+      <p class="summary-value">KSh <?= format_money($summary['total_outstanding']) ?></p>
+    </div>
+    <div class="summary-card">
+      <p class="summary-label">Overdue loans</p>
+      <p class="summary-value summary-value-red"><?= (int) $summary['overdue_count'] ?></p>
+    </div>
+    <div class="summary-card">
+      <p class="summary-label">Reminders sent this week</p>
+      <p class="summary-value"><?= (int) $summary['sent_this_week'] ?></p>
+    </div>
+  </div>
+
   <div class="dashboard-header">
     <div>
       <h1>Outstanding loans</h1>
@@ -180,6 +197,7 @@ function sort_link(string $label, string $key, string $currentKey, string $curre
       </select>
 
       <button type="submit">Search</button>
+      <a href="<?= h('export-loans.php' . build_query([])) ?>" class="export-link">Export CSV</a>
     </form>
   </div>
 
@@ -218,18 +236,18 @@ function sort_link(string $label, string $key, string $currentKey, string $curre
     <tbody>
       <?php foreach ($loans as $loan): ?>
       <tr data-loan-id="<?= (int) $loan['loan_id'] ?>">
-        <td class="select-column">
+        <td class="select-column" data-label="Select">
           <input type="checkbox" class="loan-checkbox" aria-label="Select <?= h($loan['full_name']) ?>">
         </td>
-        <td>
+        <td data-label="Member">
           <div class="member-name"><?= h($loan['full_name']) ?></div>
           <div class="member-sub"><?= h($loan['member_no']) ?> · <?= h($loan['phone']) ?></div>
         </td>
-        <td><?= h($loan['loan_no']) ?></td>
-        <td class="balance-cell">KSh <?= format_money((float) $loan['balance']) ?></td>
-        <td><?= h(date('j M Y', strtotime($loan['due_date']))) ?></td>
-        <td><span class="status-pill status-<?= h($loan['status']) ?>"><?= h($loan['status']) ?></span></td>
-        <td class="last-sent">
+        <td data-label="Loan No."><?= h($loan['loan_no']) ?></td>
+        <td class="balance-cell" data-label="Balance">KSh <?= format_money((float) $loan['balance']) ?></td>
+        <td data-label="Due"><?= h(date('j M Y', strtotime($loan['due_date']))) ?></td>
+        <td data-label="Status"><span class="status-pill status-<?= h($loan['status']) ?>"><?= h($loan['status']) ?></span></td>
+        <td class="last-sent" data-label="Last sent">
           <?php if ($loan['last_sent_at']): ?>
             <?= h(date('j M, g:ia', strtotime($loan['last_sent_at']))) ?>
             <span class="via-tag">via <?= h($loan['last_sent_via']) ?></span>
@@ -237,7 +255,7 @@ function sort_link(string $label, string $key, string $currentKey, string $curre
             <span class="muted">Never</span>
           <?php endif; ?>
         </td>
-        <td>
+        <td data-label="Send link">
           <div class="send-controls">
             <button class="send-btn" data-channel="sms">SMS</button>
             <button class="send-btn" data-channel="whatsapp">WhatsApp</button>

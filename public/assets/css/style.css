@@ -17,6 +17,19 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: 'Inter', system-ui, sans-serif;
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  background: url('../img/logo.png') center / min(520px, 72vw) auto no-repeat;
+  opacity: 0.08;
+  pointer-events: none;
 }
 
 .brand {

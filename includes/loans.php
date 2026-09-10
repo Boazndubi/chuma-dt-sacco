@@ -1,65 +1,39 @@
 <?php
 /**
- * Queries used by the admin dashboard: listing loans+members, and
- * getting-or-creating a payment link for a loan.
+ * Queries used by the admin dashboard: listing loans+members (with search,
+ * filters, sorting, and pagination), and getting-or-creating a payment link.
  */
 
 require_once __DIR__ . '/functions.php';
 
-/**
- * All loans with their member info, filterable by search text and status,
- * sortable, and paginated. Returns ['loans' => [...], 'total' => int].
- *
- * $options:
- *   search   string  free-text match on name/loan_no/member_no/phone
- *   status   string  'all' | 'active' | 'overdue' | 'cleared'
- *   last_sent string  'all' | 'sent' | 'never'
- *   due_from string   inclusive due date lower bound, YYYY-MM-DD
- *   due_to   string   inclusive due date upper bound, YYYY-MM-DD
- *   sort     string  one of: full_name, balance, due_date, status, last_sent_at
- *   dir      string  'ASC' | 'DESC'
- *   page     int
- *   per_page int
- */
-function get_loans_for_admin(PDO $pdo, array $options = []): array
+/** Builds the WHERE clause + bound params shared by the dashboard list, the
+ *  CSV export, and the summary cards, so filtering logic can't drift between them. */
+function build_loan_filter(array $options): array
 {
-    $search = trim($options['search'] ?? '');
-    $status = $options['status'] ?? 'all';
+    $search   = $options['search'] ?? '';
+    $status   = $options['status'] ?? 'all';
     $lastSent = $options['last_sent'] ?? 'all';
-    $dueFrom = $options['due_from'] ?? '';
-    $dueTo = $options['due_to'] ?? '';
+    $dueFrom  = $options['due_from'] ?? '';
+    $dueTo    = $options['due_to'] ?? '';
 
-    $sortColumnMap = [
-        'full_name'    => 'members.full_name',
-        'balance'      => 'loans.balance',
-        'due_date'     => 'loans.due_date',
-        'status'       => 'loans.status',
-        'last_sent_at' => 'last_sent_at',
-    ];
-    $sortColumn = $sortColumnMap[$options['sort'] ?? 'due_date'] ?? 'loans.due_date';
-    $sortDir = strtoupper($options['dir'] ?? 'ASC') === 'DESC' ? 'DESC' : 'ASC';
-
-    $perPage = max(1, (int) ($options['per_page'] ?? 25));
-    $page = max(1, (int) ($options['page'] ?? 1));
-    $offset = ($page - 1) * $perPage;
-
-    $where = [];
+    $where = ['1=1'];
     $params = [];
 
-    $validStatuses = ['active', 'overdue', 'cleared'];
-    if (in_array($status, $validStatuses, true)) {
-        $where[] = "loans.status = :status";
+    if ($search !== '') {
+        $where[] = "(members.full_name ILIKE :q OR loans.loan_no ILIKE :q
+                      OR members.member_no ILIKE :q OR members.phone ILIKE :q)";
+        $params['q'] = "%{$search}%";
+    }
+
+    if (in_array($status, ['active', 'overdue', 'cleared'], true)) {
+        $where[] = 'loans.status = :status';
         $params['status'] = $status;
     }
 
     if ($lastSent === 'sent') {
-        $where[] = "(SELECT latest_link.sent_at FROM payment_links latest_link
-                     WHERE latest_link.loan_id = loans.id
-                     ORDER BY latest_link.created_at DESC LIMIT 1) IS NOT NULL";
+        $where[] = 'EXISTS (SELECT 1 FROM payment_links pl WHERE pl.loan_id = loans.id AND pl.sent_at IS NOT NULL)';
     } elseif ($lastSent === 'never') {
-        $where[] = "(SELECT latest_link.sent_at FROM payment_links latest_link
-                     WHERE latest_link.loan_id = loans.id
-                     ORDER BY latest_link.created_at DESC LIMIT 1) IS NULL";
+        $where[] = 'NOT EXISTS (SELECT 1 FROM payment_links pl WHERE pl.loan_id = loans.id AND pl.sent_at IS NOT NULL)';
     }
 
     if ($dueFrom !== '') {
@@ -70,32 +44,69 @@ function get_loans_for_admin(PDO $pdo, array $options = []): array
         $where[] = 'loans.due_date <= :due_to';
         $params['due_to'] = $dueTo;
     }
-    // status === 'all' -> no filter, show every status
 
-    if ($search !== '') {
-        $where[] = "(members.full_name ILIKE :q OR loans.loan_no ILIKE :q
-                     OR members.member_no ILIKE :q OR members.phone ILIKE :q)";
-        $params['q'] = "%{$search}%";
-    }
+    return ['sql' => implode(' AND ', $where), 'params' => $params];
+}
 
-    $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
-    $fromSql  = "FROM loans JOIN members ON members.id = loans.member_id {$whereSql}";
+const LOAN_LIST_SELECT = "
+    loans.id AS loan_id, loans.loan_no, loans.balance, loans.due_date, loans.status,
+    members.full_name, members.member_no, members.phone,
+    (SELECT pl.sent_at FROM payment_links pl
+     WHERE pl.loan_id = loans.id ORDER BY pl.created_at DESC LIMIT 1) AS last_sent_at,
+    (SELECT pl.sent_via FROM payment_links pl
+     WHERE pl.loan_id = loans.id ORDER BY pl.created_at DESC LIMIT 1) AS last_sent_via
+";
 
-    // Total count (for pagination)
-    $countStmt = $pdo->prepare("SELECT COUNT(*) {$fromSql}");
+/**
+ * Options:
+ *   search    string  matched against name/loan_no/member_no/phone
+ *   status    'all'|'active'|'overdue'|'cleared'
+ *   last_sent 'all'|'sent'|'never'
+ *   due_from  'YYYY-MM-DD' or ''
+ *   due_to    'YYYY-MM-DD' or ''
+ *   sort      one of: full_name, balance, due_date, status, last_sent_at
+ *   dir       'asc'|'desc'
+ *   page      1-based page number
+ *   per_page  rows per page
+ *
+ * Returns ['loans' => [...], 'total' => int].
+ */
+function get_loans_for_admin(PDO $pdo, array $options): array
+{
+    $sort     = $options['sort'] ?? 'due_date';
+    $dir      = strtolower($options['dir'] ?? 'asc') === 'desc' ? 'DESC' : 'ASC';
+    $page     = max(1, (int) ($options['page'] ?? 1));
+    $perPage  = max(1, min(100, (int) ($options['per_page'] ?? 25)));
+
+    // Defensive whitelist even though the caller already validates this —
+    // $sort/$dir get interpolated directly into the query below, so they
+    // must never come from unvalidated input.
+    $sortColumns = [
+        'full_name'    => 'members.full_name',
+        'balance'      => 'loans.balance',
+        'due_date'     => 'loans.due_date',
+        'status'       => 'loans.status',
+        'last_sent_at' => 'last_sent_at',
+    ];
+    $orderBy = $sortColumns[$sort] ?? 'loans.due_date';
+
+    $filter = build_loan_filter($options);
+    $whereSql = $filter['sql'];
+    $params = $filter['params'];
+
+    // Total count for pagination, against the same filters.
+    $countSql = "SELECT COUNT(*) FROM loans JOIN members ON members.id = loans.member_id WHERE {$whereSql}";
+    $countStmt = $pdo->prepare($countSql);
     $countStmt->execute($params);
     $total = (int) $countStmt->fetchColumn();
 
-    // Page of results
-    $sql = "SELECT
-                loans.id AS loan_id, loans.loan_no, loans.balance, loans.due_date, loans.status,
-                members.full_name, members.member_no, members.phone,
-                (SELECT pl.sent_at FROM payment_links pl
-                 WHERE pl.loan_id = loans.id ORDER BY pl.created_at DESC LIMIT 1) AS last_sent_at,
-                (SELECT pl.sent_via FROM payment_links pl
-                 WHERE pl.loan_id = loans.id ORDER BY pl.created_at DESC LIMIT 1) AS last_sent_via
-            {$fromSql}
-            ORDER BY {$sortColumn} {$sortDir}
+    $offset = ($page - 1) * $perPage;
+
+    $sql = "SELECT " . LOAN_LIST_SELECT . "
+            FROM loans
+            JOIN members ON members.id = loans.member_id
+            WHERE {$whereSql}
+            ORDER BY {$orderBy} {$dir}
             LIMIT :limit OFFSET :offset";
 
     $stmt = $pdo->prepare($sql);
@@ -106,16 +117,75 @@ function get_loans_for_admin(PDO $pdo, array $options = []): array
     $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
     $stmt->execute();
 
+    return ['loans' => $stmt->fetchAll(), 'total' => $total];
+}
+
+/**
+ * Same filters as get_loans_for_admin(), no pagination — every matching row,
+ * for the CSV export. Capped at 5000 rows as a sanity limit.
+ */
+function get_loans_for_export(PDO $pdo, array $options): array
+{
+    $filter = build_loan_filter($options);
+
+    $sql = "SELECT " . LOAN_LIST_SELECT . "
+            FROM loans
+            JOIN members ON members.id = loans.member_id
+            WHERE {$filter['sql']}
+            ORDER BY loans.due_date ASC
+            LIMIT 5000";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($filter['params']);
+    return $stmt->fetchAll();
+}
+
+/** Total outstanding balance, overdue count, and reminders sent in the last 7 days. */
+function get_dashboard_summary(PDO $pdo): array
+{
+    $totalOutstanding = $pdo->query(
+        "SELECT COALESCE(SUM(balance), 0) FROM loans WHERE status != 'cleared'"
+    )->fetchColumn();
+
+    $overdueCount = $pdo->query(
+        "SELECT COUNT(*) FROM loans WHERE status = 'overdue'"
+    )->fetchColumn();
+
+    $sentThisWeek = $pdo->query(
+        "SELECT COUNT(*) FROM payment_links WHERE sent_at >= NOW() - INTERVAL '7 days'"
+    )->fetchColumn();
+
     return [
-        'loans' => $stmt->fetchAll(),
-        'total' => $total,
+        'total_outstanding' => (float) $totalOutstanding,
+        'overdue_count'     => (int) $overdueCount,
+        'sent_this_week'    => (int) $sentThisWeek,
     ];
+}
+
+/** Every payment link that's ever been sent, most recent first, for the activity log. */
+function get_activity_log(PDO $pdo, int $limit = 200): array
+{
+    $stmt = $pdo->prepare(
+        "SELECT
+            payment_links.sent_at, payment_links.sent_via,
+            loans.loan_no, members.full_name, members.phone,
+            admins.full_name AS admin_name
+         FROM payment_links
+         JOIN loans   ON loans.id = payment_links.loan_id
+         JOIN members ON members.id = loans.member_id
+         LEFT JOIN admins ON admins.id = payment_links.sent_by
+         WHERE payment_links.sent_at IS NOT NULL
+         ORDER BY payment_links.sent_at DESC
+         LIMIT :limit"
+    );
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll();
 }
 
 /**
  * Reuses a still-valid (unexpired) payment link for this loan if one exists,
- * otherwise creates a fresh one. Keeps us from generating a new token — and
- * invalidating the old one — every single time an admin clicks "send".
+ * otherwise creates a fresh one.
  */
 function get_or_create_payment_link(PDO $pdo, int $loanId, int $expiryDays = 14): array
 {
@@ -133,7 +203,9 @@ function get_or_create_payment_link(PDO $pdo, int $loanId, int $expiryDays = 14)
 
     $token = generate_payment_token();
     $insert = $pdo->prepare(
-        "INSERT INTO payment_links (token, loan_id, expires_at) VALUES (:token, :loan_id, :expires_at)"
+        "INSERT INTO payment_links (token, loan_id, expires_at)
+         VALUES (:token, :loan_id, :expires_at)
+         RETURNING id"
     );
     $insert->execute([
         'token'      => $token,
@@ -141,7 +213,7 @@ function get_or_create_payment_link(PDO $pdo, int $loanId, int $expiryDays = 14)
         'expires_at' => date('Y-m-d H:i:s', strtotime("+{$expiryDays} days")),
     ]);
 
-    return ['id' => (int) $pdo->lastInsertId(), 'token' => $token];
+    return ['id' => (int) $insert->fetchColumn(), 'token' => $token];
 }
 
 function mark_payment_link_sent(PDO $pdo, int $paymentLinkId, string $via, int $adminId): void
