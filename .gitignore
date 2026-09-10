@@ -1,0 +1,7 @@
+# Real secrets — never commit this. .env.example is the template that IS committed.
+.env
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+*.log
