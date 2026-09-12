@@ -1,6 +1,6 @@
 <?php
 /**
- * POST /api/stk-push.php   { token, phone }
+ * POST /api/stk-push.php   { token, product_code, member_no, phone }
  */
 
 require_once __DIR__ . '/../includes/db.php';
@@ -11,12 +11,33 @@ header('Content-Type: application/json');
 
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
 $token = $input['token'] ?? '';
+$productCode = strtoupper(trim((string) ($input['product_code'] ?? '')));
+$memberNo = trim((string) ($input['member_no'] ?? ''));
 $rawPhone = $input['phone'] ?? '';
 
 $loan = $token !== '' ? get_loan_by_token($pdo, $token) : null;
 if (!$loan) {
     http_response_code(404);
     echo json_encode(['error' => 'Invalid or expired payment link.']);
+    exit;
+}
+
+$productCodes = loan_product_codes();
+if (!isset($productCodes[$productCode])) {
+    http_response_code(422);
+    echo json_encode(['error' => 'Select a valid loan or product code.']);
+    exit;
+}
+
+if ($productCode !== strtoupper((string) $loan['product_code'])) {
+    http_response_code(422);
+    echo json_encode(['error' => 'The loan code does not match this payment link.']);
+    exit;
+}
+
+if ($memberNo === '' || !hash_equals((string) $loan['member_no'], $memberNo)) {
+    http_response_code(422);
+    echo json_encode(['error' => 'The member number does not match this payment link.']);
     exit;
 }
 
@@ -37,7 +58,8 @@ if ($amount <= 0) {
 try {
     $cfg = mpesa_config();
     $accessToken = mpesa_get_access_token($cfg);
-    $stk = mpesa_stk_push($cfg, $accessToken, $phone, $amount, $loan['loan_no']);
+    $accountReference = $productCode . $memberNo;
+    $stk = mpesa_stk_push($cfg, $accessToken, $phone, $amount, $accountReference);
 
     if (($stk['ResponseCode'] ?? null) !== '0') {
         http_response_code(502);

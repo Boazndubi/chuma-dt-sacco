@@ -22,6 +22,48 @@ body {
   isolation: isolate;
 }
 
+.card {
+  width: min(100% - 32px, 480px);
+  margin: 24px auto;
+  padding: 28px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.card .logo-img,
+.card .member-line,
+.card > .muted,
+.card .balance-label,
+.card .balance,
+.card .due-date,
+.card .footnote,
+.card .error-title {
+  text-align: center;
+}
+
+.card .logo-img { display: block; margin-left: auto; margin-right: auto; }
+
+.balance-label { margin-bottom: 4px; }
+.balance { margin: 0; font-size: 32px; font-weight: 700; color: var(--green-dark); }
+.due-date { margin-top: 6px; }
+
+@media (max-width: 480px) {
+  .card {
+    width: calc(100% - 24px);
+    margin: 12px auto;
+    padding: 22px 16px;
+  }
+
+  .logo-img { max-width: 170px; }
+  .balance { font-size: 28px; }
+  input[type="text"],
+  input[type="password"],
+  input[type="tel"],
+  select,
+  #pay-button { min-height: 48px; }
+}
+
 body::before {
   content: '';
   position: fixed;
@@ -106,7 +148,9 @@ label {
 }
 
 input[type="text"],
-input[type="password"] {
+input[type="password"],
+input[type="tel"],
+select {
   width: 100%;
   padding: 11px 12px;
   border: 1px solid var(--border);
@@ -117,6 +161,27 @@ input[type="password"] {
 }
 
 input:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+
+.field-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin: -10px 0 16px;
+}
+
+.paybill-box {
+  background: #EAF4F0;
+  border-left: 4px solid var(--green);
+  padding: 12px 14px;
+  margin: 20px 0;
+  font-size: 13px;
+}
+
+.paybill-box h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.paybill-box p { margin: 4px 0; }
 
 button {
   border: none;
@@ -262,3 +327,16 @@ button {
   background: var(--surface);
   color: var(--ink);
 }
+
+#pay-button {
+  width: 100%;
+  padding: 13px 16px;
+  background: var(--green);
+  color: #fff;
+  font-size: 15px;
+  box-shadow: 0 3px 0 var(--green-dark);
+}
+
+#pay-button:hover { background: var(--green-dark); }
+#pay-button:focus-visible { outline: 3px solid #8AD8BB; outline-offset: 2px; }
+#pay-button:disabled { opacity: 0.65; cursor: not-allowed; box-shadow: none; }

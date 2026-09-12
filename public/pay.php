@@ -6,9 +6,12 @@
 
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../config/mpesa.php';
 
 $token = $_GET['token'] ?? '';
 $loan  = $token !== '' ? get_loan_by_token($pdo, $token) : null;
+$productCodes = loan_product_codes();
+$paybillNumber = mpesa_config()['shortcode'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -46,8 +49,38 @@ $loan  = $token !== '' ? get_loan_by_token($pdo, $token) : null;
     <p class="balance">KSh <?= format_money((float) $loan['balance']) ?></p>
     <p class="due-date">Due <?= h(date('j F Y', strtotime($loan['due_date']))) ?></p>
 
+    <section class="paybill-box" aria-labelledby="paybill-heading">
+      <h2 id="paybill-heading">Pay by M-Pesa Paybill</h2>
+      <p>Paybill number: <strong><?= h((string) $paybillNumber) ?></strong></p>
+      <p>Use account number <strong>Paybill code + member number</strong>.</p>
+    </section>
+
     <form id="pay-form">
       <input type="hidden" name="token" value="<?= h($token) ?>">
+
+      <label for="product-code">Loan / product code</label>
+      <input
+        type="text"
+        id="product-code"
+        name="product_code"
+        value="<?= h((string) $loan['product_code']) ?>"
+        maxlength="3"
+        pattern="[A-Za-z0-9]{3}"
+        required
+      >
+      <?php $productDescription = $productCodes[(string) $loan['product_code']] ?? null; ?>
+      <?php if ($productDescription !== null): ?>
+        <p class="field-hint"><?= h($productDescription) ?></p>
+      <?php endif; ?>
+
+      <label for="member-number">Member number</label>
+      <input
+        type="text"
+        id="member-number"
+        name="member_no"
+        value="<?= h($loan['member_no']) ?>"
+        required
+      >
 
       <label for="phone">M-Pesa number to pay from</label>
       <input

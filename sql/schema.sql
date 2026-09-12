@@ -1,7 +1,3 @@
--- Chuma DT Sacco — Loan Payment Portal
--- Postgres (Neon) schema. Run this once against a fresh database,
--- then run sql/migration_admin.sql to add admin login + send tracking.
-
 CREATE TABLE IF NOT EXISTS members (
     id            SERIAL PRIMARY KEY,
     member_no     VARCHAR(20)  NOT NULL UNIQUE,
@@ -15,6 +11,7 @@ CREATE TABLE IF NOT EXISTS loans (
     id              SERIAL PRIMARY KEY,
     member_id       INT NOT NULL REFERENCES members(id),
     loan_no         VARCHAR(20)  NOT NULL UNIQUE,
+    product_code    VARCHAR(3),
     principal       NUMERIC(12,2) NOT NULL,
     balance         NUMERIC(12,2) NOT NULL,
     due_date        DATE NOT NULL,
@@ -23,8 +20,6 @@ CREATE TABLE IF NOT EXISTS loans (
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- One row per generated payment link. The `token` is the unguessable
--- string that goes after /pay.php?token= in the SMS/WhatsApp link.
 CREATE TABLE IF NOT EXISTS payment_links (
     id              SERIAL PRIMARY KEY,
     token           CHAR(64) NOT NULL UNIQUE,
@@ -33,8 +28,6 @@ CREATE TABLE IF NOT EXISTS payment_links (
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- One row per STK push attempt / payment. Daraja's callback updates
--- the matching row by checkout_request_id.
 CREATE TABLE IF NOT EXISTS payments (
     id                    SERIAL PRIMARY KEY,
     loan_id               INT NOT NULL REFERENCES loans(id),
@@ -54,7 +47,6 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
 CREATE INDEX IF NOT EXISTS idx_loans_member ON loans(member_id);
 
--- Postgres has no ON UPDATE CURRENT_TIMESTAMP like MySQL — a trigger does the job.
 CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;

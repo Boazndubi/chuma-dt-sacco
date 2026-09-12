@@ -14,6 +14,8 @@ if (form) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token: form.token.value,
+          product_code: form.product_code.value,
+          member_no: form.member_no.value,
           phone: form.phone.value,
         }),
       });

@@ -44,6 +44,9 @@ A loan repayment system for **Chuna DT Sacco Ltd** ("The University Sacco"). Mem
    sql/schema.sql
    sql/migration_admin.sql
    ```
+   Each loan must have its three-character `product_code` populated from the
+   Sacco loan register (for example, `NO1` or `SA2`). The member's Paybill
+   account reference is generated as `product_code + member_no`.
 
 3. **Create your first admin login**
    ```bash
