@@ -183,6 +183,25 @@ function get_activity_log(PDO $pdo, int $limit = 200): array
     return $stmt->fetchAll();
 }
 
+/** Recent M-Pesa payment attempts for the admin payments page. */
+function get_payment_log(PDO $pdo, int $limit = 200): array
+{
+    $stmt = $pdo->prepare(
+        "SELECT
+            payments.created_at, payments.updated_at, payments.phone,
+            payments.amount, payments.status, payments.mpesa_receipt,
+            payments.result_desc, loans.loan_no, members.full_name
+         FROM payments
+         JOIN loans ON loans.id = payments.loan_id
+         JOIN members ON members.id = loans.member_id
+         ORDER BY payments.created_at DESC
+         LIMIT :limit"
+    );
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll();
+}
+
 /**
  * Reuses a still-valid (unexpired) payment link for this loan if one exists,
  * otherwise creates a fresh one.

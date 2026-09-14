@@ -8,6 +8,17 @@ require_once __DIR__ . '/env.php';
 function mpesa_config(): array
 {
     $env = env('MPESA_ENV', 'sandbox');
+    $callbackUrl = env('MPESA_CALLBACK_URL');
+    $callbackSecret = env('MPESA_CALLBACK_SECRET');
+
+    // Append the shared secret as a query param on the callback URL Daraja
+    // is told to hit. Without this, anyone who finds the callback URL could
+    // POST a fake "payment succeeded" body and mark a loan as paid for free —
+    // Safaricom doesn't sign these requests by default.
+    if ($callbackUrl && $callbackSecret) {
+        $separator = str_contains($callbackUrl, '?') ? '&' : '?';
+        $callbackUrl .= $separator . 'key=' . urlencode($callbackSecret);
+    }
 
     return [
         'env'             => $env,
@@ -18,6 +29,7 @@ function mpesa_config(): array
         'consumer_secret' => env('MPESA_CONSUMER_SECRET'),
         'shortcode'       => env('MPESA_SHORTCODE'),
         'passkey'         => env('MPESA_PASSKEY'),
-        'callback_url'    => env('MPESA_CALLBACK_URL'),
+        'callback_url'    => $callbackUrl,
+        'callback_secret' => $callbackSecret,
     ];
 }

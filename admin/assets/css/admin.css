@@ -1,12 +1,12 @@
 :root {
-  --green: #0B6E4F;
-  --green-dark: #084C37;
+  --green: #0E7A4F;
+  --green-dark: #0A5E3D;
   --red: #C1272D;
-  --blue: #1B3A6B;
-  --bg: #F7F6F2;
-  --ink: #1C1C1C;
-  --muted: #6B6B65;
-  --border: #E4E1D8;
+  --blue: #1D4D7A;
+  --bg: #F5F2EA;
+  --ink: #1F2B2A;
+  --muted: #5F665F;
+  --border: #DCE2D4;
   --surface: #FFFFFF;
 }
 
@@ -314,6 +314,10 @@ button {
 }
 .status-active  { background: #E7F3EE; color: var(--green-dark); }
 .status-overdue { background: #FBEAEA; color: var(--red); }
+.status-success  { background: #E7F3EE; color: var(--green-dark); }
+.status-pending  { background: #FFF4D6; color: #7A5A00; }
+.status-failed,
+.status-cancelled { background: #FBEAEA; color: var(--red); }
 
 .via-tag { font-size: 11px; color: var(--muted); text-transform: capitalize; margin-left: 4px; }
 .muted { color: var(--muted); }

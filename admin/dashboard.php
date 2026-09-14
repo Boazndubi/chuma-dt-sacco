@@ -117,6 +117,7 @@ function sort_link(string $label, string $key, string $currentKey, string $curre
   </a>
   <div class="topbar-right">
     <a href="activity-log.php" class="logout-link">Activity log</a>
+    <a href="payments.php" class="logout-link">Payments</a>
     <span class="admin-name"><?= h($admin['full_name']) ?></span>
     <a href="logout.php" class="logout-link">Sign out</a>
   </div>

@@ -67,7 +67,60 @@ A loan repayment system for **Chuna DT Sacco Ltd** ("The University Sacco"). Mem
 
 5. **Deploy**
 
-   Point your web server's document root at `public/` for the member-facing site, and make sure `admin/`, `api/`, `includes/`, and `config/` are reachable but `.env` is not publicly served. Set `MPESA_CALLBACK_URL` and `APP_BASE_URL` in `.env` to your real domain.
+   Point your web server's document root at `public/`. The `public/api/` bridge files expose only the required API endpoints while the application code remains outside the web root. Never expose `.env`, `config/`, `includes/`, or the database files.
+
+   Set these production values in `.env`:
+
+   ```env
+   APP_BASE_URL=https://yourdomain.com
+   MPESA_ENV=production
+   MPESA_CALLBACK_URL=https://yourdomain.com/api/mpesa-callback.php
+   ```
+
+   The live server must have a valid TLS certificate, PHP cURL enabled, PHP PostgreSQL support enabled, and inbound HTTPS access. Safaricom must be able to reach the callback URL from the public internet.
+
+## Provider accounts and credentials
+
+The developer supplies the application code. The Sacco or its authorized account owner must open and verify these provider accounts, complete business/KYC checks, and provide the production credentials:
+
+### Safaricom Daraja (M-Pesa STK Push)
+
+- Production Daraja app consumer key and consumer secret
+- Registered M-Pesa Paybill or shortcode
+- STK Passkey for that shortcode
+- Confirmation that the shortcode is enabled for Lipa na M-Pesa Online
+- Public HTTPS callback URL: `https://yourdomain.com/api/mpesa-callback.php`
+- A Safaricom test line and permission to test real deductions
+
+Use the Daraja sandbox first. Replace the sandbox values only after the callback and payment flow have been tested.
+
+### Africa's Talking (SMS)
+
+- Verified Africa's Talking account
+- Live username and API key
+- SMS credit
+- Approved sender ID, if a branded sender name is required
+
+The sender ID is optional in code, but approval and availability depend on the mobile networks.
+
+### Meta WhatsApp Cloud API
+
+- Meta Business account with business verification where required
+- WhatsApp Business account and registered business phone number
+- Phone Number ID, not the visible phone number
+- Permanent system-user access token with WhatsApp messaging permissions
+- An approved template named `loan_payment_reminder` (or the configured template name)
+- Template language and body variables matching the application
+
+### Database and operations
+
+- Production PostgreSQL/Neon database and connection credentials
+- Initial schema and admin migration applied
+- First admin account created with a strong password
+- Member loan data loaded with valid product codes, phone numbers, balances, and due dates
+- A backup and log-monitoring plan
+
+Do not send credentials by email or commit them to Git. Put them only in the server's `.env` file, restrict that file's permissions, and rotate any credential that has been exposed.
 
 ## Project structure
 

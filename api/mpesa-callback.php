@@ -3,11 +3,28 @@
  * POST target Safaricom hits directly — never called by the browser.
  * Must always respond 200 with {"ResultCode":0} even if something
  * downstream fails, or Daraja will keep retrying it.
+ *
+ * Safaricom doesn't sign these requests, so anyone who finds this URL could
+ * POST a fake "payment succeeded" body. mpesa_config()['callback_url'] has a
+ * secret appended as ?key=... — Daraja is only ever told that full URL, so a
+ * request missing or mismatching it isn't a real Safaricom callback.
  */
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../config/mpesa.php';
 
 header('Content-Type: application/json');
+
+$expectedSecret = mpesa_config()['callback_secret'] ?? '';
+$providedSecret = $_GET['key'] ?? '';
+
+if ($expectedSecret === '' || !hash_equals($expectedSecret, $providedSecret)) {
+    error_log('[mpesa-callback] rejected: missing or invalid key from ' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+    // Same generic response as any other ignored payload — doesn't reveal
+    // to a prober whether the URL, the key, or anything else was the issue.
+    echo json_encode(['ResultCode' => 0, 'ResultDesc' => 'Ignored']);
+    exit;
+}
 
 $raw = file_get_contents('php://input');
 error_log('[mpesa-callback] raw: ' . $raw);
